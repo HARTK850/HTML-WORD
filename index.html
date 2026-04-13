@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>עורך HTML ל-Word</title>
+    <!-- טעינת ספריית Office.js -->
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <style>
+        /* עיצוב נקי ומודרני תואם ממשק המשתמש של Office */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 15px;
+            background-color: #f3f2f1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+            color: #323130;
+        }
+
+        h2 {
+            font-size: 18px;
+            margin: 0 0 15px 0;
+            font-weight: 600;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            flex-grow: 1;
+            height: 100%;
+        }
+
+        .section {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 150px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #605e5c;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100%;
+            resize: none;
+            padding: 10px;
+            border: 1px solid #8a8886;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            direction: ltr; /* קוד תמיד משמאל לימין */
+            box-sizing: border-box;
+            background-color: #ffffff;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #0078d4;
+            box-shadow: 0 0 3px rgba(0, 120, 212, 0.5);
+        }
+
+        /* Iframe שישמש לתצוגה המקדימה החיה */
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #8a8886;
+            border-radius: 4px;
+            background-color: #ffffff;
+            box-sizing: border-box;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #106ebe;
+        }
+
+        button.secondary {
+            background-color: #ffffff;
+            color: #0078d4;
+            border: 1px solid #0078d4;
+        }
+
+        button.secondary:hover {
+            background-color: #f3f2f1;
+        }
+
+        button.primary-action {
+            background-color: #107c41; /* ירוק אקסל/וורד מרכזי */
+            width: 100%;
+            font-size: 16px;
+            padding: 12px;
+            margin-top: 5px;
+        }
+
+        button.primary-action:hover {
+            background-color: #0b5a2f;
+        }
+
+        .status {
+            font-size: 13px;
+            font-weight: 500;
+            text-align: center;
+            height: 20px;
+            transition: opacity 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>עורך HTML חי ל-Word</h2>
+
+    <div class="toolbar">
+        <button class="secondary" onclick="saveHTML()">שמור קוד מקומי</button>
+        <button class="secondary" onclick="loadHTML()">טען מקומי</button>
+    </div>
+
+    <div class="container">
+        <!-- אזור העריכה -->
+        <div class="section">
+            <div class="section-title">קוד HTML + CSS:</div>
+            <textarea id="htmlInput" placeholder="הקלד או הדבק קוד HTML ו-CSS כאן..."></textarea>
+        </div>
+
+        <!-- אזור התצוגה המקדימה -->
+        <div class="section">
+            <div class="section-title">תצוגה מקדימה:</div>
+            <!-- sandbox="allow-same-origin" מאפשר עיצוב אך חוסם לחלוטין הרצת סקריפטים מטעמי אבטחה -->
+            <iframe id="previewFrame" sandbox="allow-same-origin"></iframe>
+        </div>
+    </div>
+
+    <!-- כפתור הזרקת התוכן -->
+    <button id="insertBtn" class="primary-action" disabled>הכנס ל-Word</button>
+    <div id="statusMsg" class="status">נטען...</div>
+
+    <script>
+        // אלמנטים מה-DOM
+        const htmlInput = document.getElementById("htmlInput");
+        const previewFrame = document.getElementById("previewFrame");
+        const insertBtn = document.getElementById("insertBtn");
+        const statusMsg = document.getElementById("statusMsg");
+
+        // קוד התחלתי לדוגמה
+        const defaultCode = `
+<div style="font-family: Arial; padding: 20px; border: 2px solid #0078d4; border-radius: 8px; background: #f9f9f9;">
+    <h1 style="color: #0078d4; text-align: center;">כותרת מתוך HTML</h1>
+    <p style="font-size: 14px; color: #333;">
+        טקסט זה עובד בדיוק כמו <strong>בדפדפן</strong>!
+        אפשר להוסיף סגנונות <i>inline</i> והם יומרו ל-Word.
+    </p>
+</div>
+        `.trim();
+
+        // אתחול התוסף של Office
+        Office.onReady((info) => {
+            if (info.host === Office.HostType.Word) {
+                insertBtn.disabled = false;
+                insertBtn.onclick = insertIntoWord;
+                
+                // טעינת הקוד ההתחלתי או קוד שמור
+                const saved = localStorage.getItem("savedWordHTML");
+                htmlInput.value = saved ? saved : defaultCode;
+                updatePreview();
+                
+                showStatus("מוכן לשימוש!", "green");
+            } else {
+                showStatus("התוסף צריך לרוץ בתוך Word.", "red");
+            }
+        });
+
+        // עדכון תצוגה מקדימה חיה
+        htmlInput.addEventListener("input", updatePreview);
+
+        function updatePreview() {
+            // שימוש ב-srcdoc בטוח מונע הרצת JS בזכות ה-sandbox
+            previewFrame.srcdoc = htmlInput.value;
+        }
+
+        // שמירה ל-LocalStorage
+        function saveHTML() {
+            localStorage.setItem("savedWordHTML", htmlInput.value);
+            showStatus("הקוד נשמר בדפדפן בהצלחה!", "green");
+        }
+
+        // טעינה מ-LocalStorage
+        function loadHTML() {
+            const saved = localStorage.getItem("savedWordHTML");
+            if (saved) {
+                htmlInput.value = saved;
+                updatePreview();
+                showStatus("הקוד נטען בהצלחה!", "green");
+            } else {
+                showStatus("אין קוד שמור בזיכרון.", "red");
+            }
+        }
+
+        // הפונקציה המרכזית: הזנת ה-HTML לתוך מסמך Word
+        async function insertIntoWord() {
+            showStatus("מכניס למסמך...", "blue");
+            
+            try {
+                await Word.run(async (context) => {
+                    const htmlContent = htmlInput.value;
+                    
+                    // מציאת מיקום הסמן הנוכחי של המשתמש במסמך
+                    const selection = context.document.getSelection();
+                    
+                    // הזנת ה-HTML. המנוע של Word יודע לפרסס CSS inline באופן טבעי
+                    // אנו מחליפים את הבחירה (או מוסיפים במיקום הסמן אם אין טקסט מסומן)
+                    selection.insertHtml(htmlContent, Word.InsertLocation.replace);
+                    
+                    // סנכרון הפקודה מול התוכנה
+                    await context.sync();
+                });
+                
+                showStatus("הוזן למסמך בהצלחה!", "green");
+            } catch (error) {
+                console.error("שגיאה:", error);
+                showStatus("שגיאה בהזנה: " + error.message, "red");
+            }
+        }
+
+        // פונקציית עזר להצגת הודעות סטטוס
+        let timeoutId;
+        function showStatus(text, color) {
+            statusMsg.textContent = text;
+            statusMsg.style.color = color;
+            
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                statusMsg.textContent = "";
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
